@@ -10,7 +10,9 @@
 // PAGE_ACTION in shared/generate-css.js).
 //
 // It only looks at what is under the pointer, and only ever tells the
-// extension's own background script "on" or "off".
+// extension's own background script "on" or "off". Copies also run in the
+// page's frames, which only report the pointer to the page's copy (see
+// reportFromFrame).
 
 (() => {
   // Open pages get the script injected when the option is switched on, and
@@ -32,6 +34,11 @@
   // Things bigger than this share of the window are page-sized containers made
   // clickable as a whole, which would keep the bars shut everywhere.
   const MAX_SHARE = 0.4;
+  // Things running along this share of an edge or more don't count by that
+  // edge, or its bar could never open: Google Docs and Sheets make their whole
+  // header focusable, the full width of the window, and a page's own scrollbar
+  // runs the full height of its side.
+  const MAX_EDGE_SHARE = 0.9;
 
   const CLICKABLE = [
     "a[href]",
@@ -94,6 +101,12 @@
     return distance(edge, x, y) < boxDistance(edge, r);
   }
 
+  /** Whether a box runs along most of an edge of the window (see MAX_EDGE_SHARE). */
+  function spansEdge(edge, r) {
+    const [along, length] = edge === "top" || edge === "bottom" ? [r.width, innerWidth] : [r.height, innerHeight];
+    return along >= MAX_EDGE_SHARE * length;
+  }
+
   // ---------------------------------------------------------------------------
   // What is clickable
   // ---------------------------------------------------------------------------
@@ -114,16 +127,21 @@
     return el.parentElement ?? el.getRootNode().host ?? null;
   }
 
-  function pageSized(el) {
-    const r = el.getBoundingClientRect();
+  /** Whether a box is page-sized (see MAX_SHARE). */
+  function pageSized(r) {
     return r.width * r.height > MAX_SHARE * innerWidth * innerHeight;
   }
 
-  /** The clickable element that `el` belongs to, if any. */
-  function clickableFrom(el) {
+  /**
+   * The clickable element that `el` belongs to, if any. Page-sized ones don't
+   * count, except with `anySize`: in a frame, where only the page knows how
+   * big the window is (see onFramePointer).
+   */
+  function clickableFrom(el, anySize = false) {
     const stop = (node) => !node || node === document.body || node === document.documentElement;
+    const fits = (node) => anySize || !pageSized(node.getBoundingClientRect());
     for (let node = el; !stop(node); node = parentOf(node)) {
-      if (node.matches(CLICKABLE)) return pageSized(node) ? null : node;
+      if (node.matches(CLICKABLE)) return fits(node) ? node : null;
     }
     // Plenty of sites make plain elements clickable with a script and give
     // them a pointer cursor. The cursor is inherited, so climb to the element
@@ -133,15 +151,17 @@
     for (let node = parentOf(el); !stop(node) && getComputedStyle(node).cursor === "pointer"; node = parentOf(node)) {
       top = node;
     }
-    return pageSized(top) ? null : top;
+    return fits(top) ? top : null;
   }
 
   /**
    * What the pointer would click at a point, as a function returning its box
    * (boxes move when the page scrolls), or null. The page's own scrollbars
-   * count; overlay scrollbars take no room and can't be told apart.
+   * count, except along their own side (see MAX_EDGE_SHARE); overlay
+   * scrollbars take no room and can't be told apart. `anySize` as for
+   * clickableFrom.
    */
-  function targetAt(x, y) {
+  function targetAt(x, y, anySize = false) {
     const root = document.documentElement;
     if (root.clientWidth < innerWidth && x >= root.clientWidth) {
       return () => new DOMRect(root.clientWidth, 0, innerWidth - root.clientWidth, innerHeight);
@@ -149,7 +169,7 @@
     if (root.clientHeight < innerHeight && y >= root.clientHeight) {
       return () => new DOMRect(0, root.clientHeight, innerWidth, innerHeight - root.clientHeight);
     }
-    const el = clickableFrom(elementAt(x, y));
+    const el = clickableFrom(elementAt(x, y), anySize);
     return el ? () => el.getBoundingClientRect() : null;
   }
 
@@ -189,8 +209,10 @@
    * the pointer through while it is on something clickable near an edge, or on
    * its way up to something clickable inside a zone. Anywhere else, including
    * past that thing toward the edge, they take it back at once and the bar opens.
+   * `target` is what the pointer is on (see targetAt), when worked out
+   * elsewhere: in a frame (see onFramePointer).
    */
-  function evaluate(x, y) {
+  function evaluate(x, y, target = targetAt(x, y)) {
     const watched = zones.filter((z) => distance(z.edge, x, y) < z.size + WATCH);
     if (!watched.length) {
       reset();
@@ -205,9 +227,8 @@
       dwellDone = false;
     }
 
-    // On something clickable near an edge.
-    const target = targetAt(x, y);
-    if (target && watched.some((z) => boxDistance(z.edge, target()) < z.size + NEAR)) {
+    // On something clickable near an edge, and not running along it.
+    if (target && watched.some((z) => boxDistance(z.edge, target()) < z.size + NEAR && !spansEdge(z.edge, target()))) {
       stopDwell();
       setHold(true);
       return;
@@ -219,7 +240,7 @@
       const depth = distance(zone.edge, x, y);
       if (depth >= zone.size + REACH) continue;
       const underZone = targetAt(...pointInZone(zone, x, y));
-      if (underZone && !pastBox(zone.edge, underZone(), x, y)) {
+      if (underZone && !pastBox(zone.edge, underZone(), x, y) && !spansEdge(zone.edge, underZone())) {
         if (depth < zone.size) startDwell();
         else stopDwell();
         setHold(true);
@@ -231,8 +252,63 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Frames
+  // ---------------------------------------------------------------------------
+
+  // The page's copy can't see the pointer while it is over a frame, and a
+  // frame's copy can't see the hover zones, which lie over the page around it.
+  // On techtrash.org a frame fills the page right below a title bar whose
+  // buttons sit under the hover zone, so the pointer reached them unseen. So a
+  // frame's copy reports each move, and the clickable thing it is on, for the
+  // page's copy to place on the page.
+
+  /** In a frame: reports a pointer move, through the background script. */
+  function reportFromFrame(e) {
+    if (e.pointerType !== "mouse") return;
+    const r = targetAt(e.clientX, e.clientY, true)?.();
+    const box = r ? [r.left, r.top, r.width, r.height] : null;
+    browser.runtime.sendMessage({ type: "click-through-frame", x: e.clientX, y: e.clientY, box }).catch(() => {
+      // The extension was updated or switched off; this copy is an orphan now.
+    });
+  }
+
+  /** On the page: the frame element a frame's report came from, or null for a frame deeper down. */
+  function frameElement(frameId) {
+    const isIt = (el) => {
+      try {
+        return browser.runtime.getFrameId(el) === frameId;
+      } catch {
+        return false; // a frame with nothing loaded in it yet
+      }
+    };
+    return [...document.querySelectorAll("iframe, frame")].find(isIt) ?? null;
+  }
+
+  /**
+   * On the page: a frame's report (see reportFromFrame), placed on the page
+   * from where the frame's inside is, and looked at like any other move.
+   */
+  function onFramePointer({ frameId, x, y, box }) {
+    if (!zones.length || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    const frame = frameElement(frameId);
+    if (!frame) return;
+    const r = frame.getBoundingClientRect();
+    const style = getComputedStyle(frame);
+    const left = r.left + frame.clientLeft + parseFloat(style.paddingLeft);
+    const top = r.top + frame.clientTop + parseFloat(style.paddingTop);
+    const on = Array.isArray(box) && box.every(Number.isFinite) ? new DOMRect(left + box[0], top + box[1], box[2], box[3]) : null;
+    pointer = [left + x, top + y];
+    evaluate(...pointer, on && !pageSized(on) ? () => on : null);
+  }
+
+  // ---------------------------------------------------------------------------
   // Wiring
   // ---------------------------------------------------------------------------
+
+  if (window !== window.top) {
+    addEventListener("pointermove", reportFromFrame, { capture: true, passive: true });
+    return;
+  }
 
   // Firefox already sends at most one pointermove per frame.
   function onPointerMove(e) {
@@ -247,7 +323,7 @@
   }
 
   // The pointer left the page: out of the window, onto Firefox's own UI or
-  // into a frame this script doesn't watch.
+  // into a frame. A frame's copy reports from there (see reportFromFrame).
   function onPointerOut(e) {
     if (e.relatedTarget && !/^(iframe|frame|object|embed)$/i.test(e.relatedTarget.localName)) return;
     pointer = null;
@@ -283,6 +359,7 @@
   // start over from there.
   browser.runtime.onMessage.addListener((message) => {
     if (message?.type === "click-through-reset") held = false;
+    if (message?.type === "click-through-frame") onFramePointer(message);
   });
   addEventListener("pageshow", () => (held = false));
   browser.storage.onChanged.addListener((changes, area) => {

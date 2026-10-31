@@ -13,11 +13,15 @@ const CHECK_EVERY_MINUTES = 12 * 60;
 const SETTLE_ALARM = "settle-prefs";
 const HOST = "autohide_tab_bar";
 
-// The page script behind "Let clicks through to the page".
+// The page script behind "Let clicks through to the page". It also runs in
+// frames, including blank ones a page fills in itself, to report the pointer
+// over them to the page's copy.
 const CLICK_THROUGH_SCRIPT = {
   id: "click-through",
   js: ["content/click-through.js"],
   matches: CLICK_THROUGH_ACCESS.origins,
+  allFrames: true,
+  matchOriginAsFallback: true,
   runAt: "document_idle",
 };
 
@@ -86,6 +90,14 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message?.type === "click-through" && sender.tab && sender.frameId === 0) {
     return flagTab(sender.tab.id, message.hold === true ? "hold" : null);
   }
+  // A copy in a frame reports the pointer there, for the page's copy.
+  if (message?.type === "click-through-frame" && sender.tab && sender.frameId > 0) {
+    const { x, y, box } = message;
+    const report = { type: "click-through-frame", frameId: sender.frameId, x, y, box };
+    browser.tabs.sendMessage(sender.tab.id, report, { frameId: 0 }).catch(() => {
+      // No page script in the page itself (one of Firefox's own pages, say).
+    });
+  }
 });
 
 async function scheduleChecks() {
@@ -145,12 +157,14 @@ async function syncClickThrough({ openTabs = false } = {}) {
   const registered = (await browser.scripting.getRegisteredContentScripts({ ids })).length > 0;
   const tabs = await browser.tabs.query({});
   if (await clickThroughAllowed()) {
-    if (!registered) await browser.scripting.registerContentScripts([CLICK_THROUGH_SCRIPT]);
+    // Updating brings a registration from an older version up to date.
+    if (registered) await browser.scripting.updateContentScripts([CLICK_THROUGH_SCRIPT]);
+    else await browser.scripting.registerContentScripts([CLICK_THROUGH_SCRIPT]);
     for (const tab of tabs) if (tab.active) checkSeen(tab.id);
     if (!openTabs) return;
     for (const tab of tabs) {
       // Firefox's own pages and addons.mozilla.org refuse; nothing to do there.
-      browser.scripting.executeScript({ target: { tabId: tab.id }, files: CLICK_THROUGH_SCRIPT.js }).catch(() => {});
+      browser.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: CLICK_THROUGH_SCRIPT.js }).catch(() => {});
     }
   } else {
     if (registered) await browser.scripting.unregisterContentScripts({ ids });

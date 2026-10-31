@@ -3,6 +3,23 @@
 Each version is a `v` tag, with the extension and helper on its
 [release page](https://github.com/mattsaund/kits-firefox-plugin/releases).
 
+## 0.5.2 (2026-10-31)
+
+- **Fixed: on Google Docs and Sheets the top bars never came back** with
+  **Let clicks through to the page** on. Docs and Sheets make their whole
+  header one clickable area the width of the window, so the pointer was
+  always on a "button" at the top. Something running along nearly a whole
+  edge no longer keeps that edge's bar shut. The header's real buttons, like
+  Share, still let clicks through.
+- **Buttons by an embedded frame let clicks through.** Kits couldn't see the
+  pointer while it was over a frame inside the page, so a button just above
+  one, like the close button on techtrash.org's window, got covered by the
+  bar on the way to it. Kits now follows the pointer through frames, and
+  buttons inside frames by an edge let clicks through too.
+- With classic scrollbars (the kind that take up room), a tab bar on the
+  right now opens over the page's scrollbar. Before, it never opened there.
+- No Apply or helper update needed: updating is enough.
+
 ## 0.5.1 (2026-10-24)
 
 - **Fixed: fullscreen videos stayed small in a maximized window.** With the
