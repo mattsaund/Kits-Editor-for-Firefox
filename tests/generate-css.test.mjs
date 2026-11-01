@@ -768,3 +768,10 @@ test("font names are trimmed, and unsafe or overlong ones fall back to Firefox's
   }
   assert.equal(sanitize({ uiFont: "x".repeat(100) }).uiFont.length, 100);
 });
+
+test("the reviewer notes sent with each signing fit Mozilla's limit", async () => {
+  // addons.mozilla.org refuses a submission whose notes run over 3000 characters.
+  const { readFile } = await import("node:fs/promises");
+  const metadata = JSON.parse(await readFile(new URL("../.github/amo-metadata.json", import.meta.url), "utf8"));
+  assert.ok(metadata.version.approval_notes.length <= 3000, `${metadata.version.approval_notes.length} characters`);
+});
