@@ -1,8 +1,8 @@
 {
-  "name": "kits-firefox-plugin",
+  "name": "kits-editor-for-firefox",
   "version": "0.5.2",
   "private": true,
-  "description": "Firefox extension: an auto-hiding tab bar on any edge of the window.",
+  "description": "Firefox CSS Editor",
   "license": "MIT",
   "author": "Matthew Saunders",
   "contributors": [

@@ -63,7 +63,7 @@ jobs:
           AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          xpi="dist/kits-firefox-plugin-$VERSION.xpi"
+          xpi="dist/kits-editor-for-firefox-$VERSION.xpi"
           mkdir -p dist
           if [ -n "$AMO_API_KEY" ] && [ -n "$AMO_API_SECRET" ]; then
             npx web-ext sign --source-dir extension --artifacts-dir dist/signed \
@@ -93,7 +93,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          files="dist/kits-firefox-plugin-$VERSION.xpi native-host/install.sh native-host/install.ps1 native-host/autohide_tab_bar_host.py"
+          files="dist/kits-editor-for-firefox-$VERSION.xpi native-host/install.sh native-host/install.ps1 native-host/autohide_tab_bar_host.py"
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             gh release upload "v$VERSION" $files --clobber
             gh release edit "v$VERSION" --notes-file notes.md

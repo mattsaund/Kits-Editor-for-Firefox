@@ -2,8 +2,8 @@
 # Installs (or with --uninstall, removes) the Kits Editor for Firefox helper for
 # the current user, on macOS or Linux.
 #
-#   curl -fsSL https://github.com/mattsaund/kits-firefox-plugin/releases/latest/download/install.sh | sh
-#   curl -fsSL https://github.com/mattsaund/kits-firefox-plugin/releases/latest/download/install.sh | sh -s -- --uninstall
+#   curl -fsSL https://github.com/mattsaund/Kits-Editor-for-Firefox/releases/latest/download/install.sh | sh
+#   curl -fsSL https://github.com/mattsaund/Kits-Editor-for-Firefox/releases/latest/download/install.sh | sh -s -- --uninstall
 #
 # Run from a checkout it installs the helper next to it; piped from curl it
 # downloads the helper from the latest release. Either way the helper is
@@ -15,7 +15,7 @@ set -eu
 NAME="autohide_tab_bar"
 EXTENSION_ID="autohide-tab-bar@kits"
 HOST_FILE="autohide_tab_bar_host.py"
-DOWNLOAD="https://github.com/mattsaund/kits-firefox-plugin/releases/latest/download"
+DOWNLOAD="https://github.com/mattsaund/Kits-Editor-for-Firefox/releases/latest/download"
 
 case "$(uname -s)" in
   Darwin)

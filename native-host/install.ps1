@@ -1,8 +1,8 @@
 # Installs (or with -Uninstall, removes) the Kits Editor for Firefox helper for
 # the current user on Windows.
 #
-#   irm https://github.com/mattsaund/kits-firefox-plugin/releases/latest/download/install.ps1 | iex
-#   & ([scriptblock]::Create((irm https://github.com/mattsaund/kits-firefox-plugin/releases/latest/download/install.ps1))) -Uninstall
+#   irm https://github.com/mattsaund/Kits-Editor-for-Firefox/releases/latest/download/install.ps1 | iex
+#   & ([scriptblock]::Create((irm https://github.com/mattsaund/Kits-Editor-for-Firefox/releases/latest/download/install.ps1))) -Uninstall
 #
 # Run from a checkout it installs the helper next to it; piped from irm it
 # downloads the helper from the latest release. The helper is copied to its own
@@ -19,7 +19,7 @@ $ErrorActionPreference = "Stop"
 $Name = "autohide_tab_bar"
 $ExtensionId = "autohide-tab-bar@kits"
 $HostFile = "autohide_tab_bar_host.py"
-$Download = "https://github.com/mattsaund/kits-firefox-plugin/releases/latest/download"
+$Download = "https://github.com/mattsaund/Kits-Editor-for-Firefox/releases/latest/download"
 $InstallDir = Join-Path $env:LOCALAPPDATA "AutoHideTabBar"
 $RegistryKey = "HKCU:\Software\Mozilla\NativeMessagingHosts\$Name"
 

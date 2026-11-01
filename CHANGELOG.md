@@ -1,7 +1,7 @@
 # Changelog
 
 Each version is a `v` tag, with the extension and helper on its
-[release page](https://github.com/mattsaund/kits-firefox-plugin/releases).
+[release page](https://github.com/mattsaund/Kits-Editor-for-Firefox/releases).
 
 ## 0.5.2 (2026-10-31)
 

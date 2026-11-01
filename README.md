@@ -1,6 +1,6 @@
 # Kits Editor for Firefox
 
-Hide Firefox's bars until you need them. The page gets the whole window.
+Firefox CSS Editor
 
 ## Infinite vertical space
 
@@ -35,17 +35,17 @@ going to the search bar):
 macOS, Linux:
 
 ```sh
-curl -fsSL https://github.com/mattsaund/kits-firefox-plugin/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/mattsaund/Kits-Editor-for-Firefox/releases/latest/download/install.sh | sh
 ```
 
 Windows (PowerShell):
 
 ```powershell
-irm https://github.com/mattsaund/kits-firefox-plugin/releases/latest/download/install.ps1 | iex
+irm https://github.com/mattsaund/Kits-Editor-for-Firefox/releases/latest/download/install.ps1 | iex
 ```
 
 **2. Extension.** Open the `.xpi` from the
-[latest release](https://github.com/mattsaund/kits-firefox-plugin/releases/latest)
+[latest release](https://github.com/mattsaund/Kits-Editor-for-Firefox/releases/latest)
 in Firefox.
 
 **3. Set up.** Click the extension's toolbar button, pick a layout, press
@@ -82,11 +82,11 @@ Removing the extension turns its look off. To also remove its files, press
 **Remove from Firefox** first, restart Firefox, then remove the helper:
 
 ```sh
-curl -fsSL https://github.com/mattsaund/kits-firefox-plugin/releases/latest/download/install.sh | sh -s -- --uninstall
+curl -fsSL https://github.com/mattsaund/Kits-Editor-for-Firefox/releases/latest/download/install.sh | sh -s -- --uninstall
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm https://github.com/mattsaund/kits-firefox-plugin/releases/latest/download/install.ps1))) -Uninstall
+& ([scriptblock]::Create((irm https://github.com/mattsaund/Kits-Editor-for-Firefox/releases/latest/download/install.ps1))) -Uninstall
 ```
 
 ## Contributing

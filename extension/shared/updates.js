@@ -1,7 +1,7 @@
 // Checks GitHub for a newer release. Used by the background script (which
 // announces updates) and the settings page (which shows them).
 
-export const REPO = "mattsaund/kits-firefox-plugin";
+export const REPO = "mattsaund/Kits-Editor-for-Firefox";
 const RELEASES_PAGE = `https://github.com/${REPO}/releases`;
 const LATEST_RELEASE_API = `https://api.github.com/repos/${REPO}/releases/latest`;
 
@@ -38,9 +38,11 @@ export function compareVersions(a, b) {
   return 0;
 }
 
-// Only ever link to this repo's own release pages and downloads.
+// Only ever link to this repo's own release pages and downloads. GitHub
+// ignores case in repository names, so the check does too.
 function ownGithubUrl(url) {
-  return typeof url === "string" && url.startsWith(`https://github.com/${REPO}/`) ? url : null;
+  const own = `https://github.com/${REPO}/`.toLowerCase();
+  return typeof url === "string" && url.toLowerCase().startsWith(own) ? url : null;
 }
 
 /** The latest published release: { version, download, page }. */
