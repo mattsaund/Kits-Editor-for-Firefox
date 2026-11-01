@@ -1,6 +1,9 @@
 # Kits Editor for Firefox
 
-Firefox CSS Editor
+**Firefox CSS Editor.** Restyle Firefox itself, not just the pages it shows:
+the tab bar, toolbar, address bar and bookmarks bar, from a settings page with a
+live preview. Hide Firefox's bars until you need them. The page gets the whole
+window.
 
 ## Infinite vertical space
 
@@ -17,6 +20,8 @@ going to the search bar):
 
 ## What it does
 
+- Edits Firefox's own CSS for you: your design goes into its `userChrome.css`,
+  with no files to touch.
 - Tab bar on any edge. Toolbar and bookmarks bar on the top or bottom, in any
   order.
 - Each bar can hide, and slides out when you point at its edge.

@@ -3,6 +3,16 @@
 Each version is a `v` tag, with the extension and helper on its
 [release page](https://github.com/mattsaund/Kits-Editor-for-Firefox/releases).
 
+## 0.5.3 (2026-11-01)
+
+- **Kits has a new home on GitHub:**
+  [Kits-Editor-for-Firefox](https://github.com/mattsaund/Kits-Editor-for-Firefox).
+  The settings page, the install commands and update checks use the new
+  address. The old one still works and leads there.
+- **Updating from an earlier version:** the Download button opens the
+  releases page this once. Click the `.xpi` there to install the update.
+- No Apply or helper update needed: updating is enough.
+
 ## 0.5.2 (2026-10-31)
 
 - **Fixed: on Google Docs and Sheets the top bars never came back** with
