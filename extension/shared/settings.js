@@ -36,6 +36,7 @@ const int = (min, max, def) => ({ type: "int", min, max, default: def });
 const bool = (def) => ({ type: "bool", default: def });
 const color = (def) => ({ type: "color", default: def });
 const oneOf = (values, def) => ({ type: "enum", values, default: def });
+const font = (def) => ({ type: "font", default: def });
 
 // Widest hover zone, for the tab bar and the toolbar. The zone sits over the
 // page edge and takes its clicks, so much more than this would be in the way.
@@ -143,6 +144,11 @@ export const FIELDS = {
   urlbarSearchTerms: oneOf(TRI, "keep"),
   // 0 = keep Firefox's setting.
   urlbarResults: int(0, 20, 0),
+
+  // Firefox's own font, for its bars and menus, by family name; "" keeps
+  // Firefox's. The settings page offers the fonts installed on the computer,
+  // which the helper lists.
+  uiFont: font(""),
 };
 
 // Firefox's own layout: tabs, toolbar and bookmarks bar along the top in that
@@ -159,6 +165,21 @@ export const REGULAR_LAYOUT = {
 };
 
 const COLOR_RE = /^#[0-9a-f]{6}$/i;
+
+// The longest font family name taken, as long as the helper lists.
+const MAX_FONT_NAME = 100;
+
+/**
+ * A font family name the stylesheet can take (see fontFamilyCss in
+ * generate-css.js), trimmed: no control characters, nothing the helper
+ * refuses in a stylesheet, and not overlong. Otherwise null.
+ */
+function fontName(value) {
+  if (typeof value !== "string") return null;
+  const name = value.trim();
+  const unsafe = /[\u0000-\u001f\u007f]/.test(name) || /url\s*\(|@import/i.test(name);
+  return name.length <= MAX_FONT_NAME && !unsafe ? name : null;
+}
 
 /** Every field at its default value. */
 export function defaults() {
@@ -179,6 +200,8 @@ function clean(field, value) {
       return typeof value === "string" && COLOR_RE.test(value) ? value.toLowerCase() : field.default;
     case "enum":
       return field.values.includes(value) ? value : field.default;
+    case "font":
+      return fontName(value) ?? field.default;
   }
   throw new Error(`Unknown field type ${field.type}`);
 }

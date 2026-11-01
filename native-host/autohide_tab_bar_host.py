@@ -11,8 +11,10 @@ the Firefox profile:
 
 Rules of the user's own in userChrome.css would override the extension's, so
 apply sets them aside in userChrome.css.ahtb-backup and remove puts them back.
-Anything else in user.js is left alone. Firefox starts the script once per
-message (runtime.sendNativeMessage); it answers and exits.
+Anything else in user.js is left alone. It also lists the fonts installed on
+the computer, which extensions can't see, for the settings page's font list.
+Firefox starts the script once per message (runtime.sendNativeMessage); it
+answers and exits.
 
 Standard library only; Python 3.8+. macOS, Linux and Windows.
 """
@@ -30,7 +32,7 @@ import sys
 import tempfile
 import time
 
-VERSION = "0.5.3"
+VERSION = "0.5.4"
 
 CSS_FILENAME = "autohide-tab-bar.css"
 BACKUP_SUFFIX = ".ahtb-backup"
@@ -439,6 +441,137 @@ def profile_paths(profile):
 
 
 # ---------------------------------------------------------------------------
+# Fonts
+# ---------------------------------------------------------------------------
+
+# Font files read for their family names where fontconfig isn't there to ask.
+FONT_FILE_EXTENSIONS = (".ttf", ".otf", ".ttc", ".otc")
+# Names starting with these aren't meant to be picked: macOS's own UI fonts
+# (".SF NS") and Windows' sideways fonts for vertical text ("@MS Gothic").
+HIDDEN_FONT_PREFIXES = (".", "@")
+# The longest family name passed on; the settings page takes no longer.
+MAX_FONT_NAME = 100
+
+
+def font_dirs():
+    """The folders holding the fonts installed on this computer, the user's own included."""
+    home = os.path.expanduser("~")
+    system = platform.system()
+    if system == "Darwin":
+        return ["/System/Library/Fonts", "/Library/Fonts", os.path.join(home, "Library", "Fonts")]
+    if system == "Windows":
+        windows = os.environ.get("WINDIR", r"C:\Windows")
+        dirs = [os.path.join(windows, "Fonts")]
+        if os.environ.get("LOCALAPPDATA"):
+            dirs.append(os.path.join(os.environ["LOCALAPPDATA"], "Microsoft", "Windows", "Fonts"))
+        return dirs
+    data = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
+    return ["/usr/share/fonts", "/usr/local/share/fonts", os.path.join(data, "fonts"), os.path.join(home, ".fonts")]
+
+
+def read_at(f, offset, size):
+    """`size` bytes of a file from `offset`, or an error if the file is shorter."""
+    f.seek(offset)
+    data = f.read(size)
+    if len(data) < size:
+        raise ValueError("truncated font file")
+    return data
+
+
+def name_table_family(f, font_offset):
+    """The family name of one font in a file, from its name table, or None.
+
+    The typographic family (name 16) groups every weight and style under one
+    name, as Firefox lists it; fonts without one have only the family (name 1).
+    Windows' Unicode names in US English come first, then other Unicode names,
+    then old Mac Roman ones.
+    """
+    num_tables = struct.unpack(">H", read_at(f, font_offset + 4, 2))[0]
+    directory = read_at(f, font_offset + 12, 16 * num_tables)
+    for i in range(num_tables):
+        tag, _, table, _ = struct.unpack(">4sIII", directory[16 * i : 16 * i + 16])
+        if tag == b"name":
+            break
+    else:
+        return None
+    _, count, strings = struct.unpack(">HHH", read_at(f, table, 6))
+    records = read_at(f, table + 6, 12 * count)
+    found = {}
+    for i in range(count):
+        platform_id, encoding, language, name_id, length, offset = struct.unpack(">6H", records[12 * i : 12 * i + 12])
+        if name_id not in (1, 16):
+            continue
+        raw = read_at(f, table + strings + offset, length)
+        if platform_id in (0, 3):
+            rank = 0 if platform_id == 3 and language == 0x409 else 1
+            text = raw.decode("utf-16-be", "replace")
+        elif platform_id == 1 and encoding == 0:
+            rank, text = 2, raw.decode("mac_roman", "replace")
+        else:
+            continue
+        key = (name_id != 16, rank)
+        if text.strip() and key not in found:
+            found[key] = text.strip()
+    return found[min(found)] if found else None
+
+
+def font_file_families(path):
+    """The family names in a font file: one, or one per font in a collection."""
+    with open(path, "rb") as f:
+        head = read_at(f, 0, 12)
+        if head[:4] == b"ttcf":
+            count = struct.unpack(">I", head[8:12])[0]
+            offsets = struct.unpack(">{}I".format(count), read_at(f, 12, 4 * count))
+        else:
+            offsets = (0,)
+        return [name for name in (name_table_family(f, offset) for offset in offsets) if name]
+
+
+def fonts_in_dirs(dirs):
+    """The family names of the font files in these folders and their subfolders."""
+    names = []
+    for root_dir in dirs:
+        for folder, _, files in os.walk(root_dir):
+            for file in files:
+                if file.lower().endswith(FONT_FILE_EXTENSIONS):
+                    try:
+                        names.extend(font_file_families(os.path.join(folder, file)))
+                    except (OSError, ValueError, struct.error):
+                        pass  # not a font file this can read; leave it out
+    return names
+
+
+def fontconfig_families():
+    """The family names fontconfig knows, as Firefox on Linux sees them, or None without fontconfig."""
+    fc_list = shutil.which("fc-list")
+    if not fc_list:
+        return None
+    try:
+        out = subprocess.run([fc_list, "--format", "%{family[0]}\n"], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout.splitlines() if out.returncode == 0 else None
+
+
+def tidy_font_names(names):
+    """Font names to offer: hidden and overlong ones dropped, each once, in alphabetical order."""
+    tidy = {}
+    for name in names:
+        name = name.strip()
+        if name and len(name) <= MAX_FONT_NAME and not name.startswith(HIDDEN_FONT_PREFIXES):
+            tidy.setdefault(name.casefold(), name)
+    return sorted(tidy.values(), key=str.casefold)
+
+
+def fonts(msg, ctx):
+    """The fonts installed on this computer, for the settings page's font list."""
+    names = fontconfig_families() if platform.system() == "Linux" else None
+    if names is None:
+        names = fonts_in_dirs(font_dirs())
+    return {"ok": True, "fonts": tidy_font_names(names)}
+
+
+# ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
 
@@ -588,16 +721,17 @@ def remove(msg, ctx):
 
 
 # The messages the extension can send.
-COMMANDS = {"status": status, "apply": apply, "remove": remove, "settle": settle}
+COMMANDS = {"status": status, "apply": apply, "remove": remove, "settle": settle, "fonts": fonts}
 
 
 def handle(msg, ctx=None):
     """Runs one command. ctx (profiles and the running Firefox) is injectable for tests."""
-    if ctx is None:
-        profiles = list_profiles()
-        ctx = {"profiles": profiles, "running": running_firefox(profiles)}
     if not isinstance(msg, dict) or msg.get("cmd") not in COMMANDS:
         raise HostError("Unknown command")
+    # Listing fonts has nothing to do with profiles; skip looking for them.
+    if ctx is None and msg["cmd"] != "fonts":
+        profiles = list_profiles()
+        ctx = {"profiles": profiles, "running": running_firefox(profiles)}
     return COMMANDS[msg["cmd"]](msg, ctx)
 
 

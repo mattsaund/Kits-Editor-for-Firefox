@@ -26,6 +26,8 @@ going to the search bar):
   order.
 - Each bar can hide, and slides out when you point at its edge.
 - Sizes, colors and speed, set inside Firefox with a live preview.
+- Firefox's font: pick any font installed on your computer, each shown with a
+  sample sentence.
 - Profiles: save a setup with its Firefox theme, and switch between them.
 - Optional: links near an edge stay clickable.
 

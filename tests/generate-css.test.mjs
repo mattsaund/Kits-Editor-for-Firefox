@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { SIGNALS } from "../extension/shared/click-through.js";
-import { generateCss } from "../extension/shared/generate-css.js";
+import { fontFamilyCss, generateCss } from "../extension/shared/generate-css.js";
 import {
   POSITIONS,
   REGULAR_LAYOUT,
@@ -62,6 +62,7 @@ function variants() {
             { backgroundCustom: false },
             { expandedHeightAuto: false },
             { tabHeightCustom: true, shadow: true },
+            { uiFont: 'Font "Quoted" \\ Back' },
           ]) {
             for (const bookmarks of [
               { bookmarksPosition: toolbarPosition },
@@ -748,4 +749,22 @@ test("with the toolbar floating over the page, going fullscreen from a maximized
     // the other edge (see fixedStrips).
     assert.ok(!css.includes('[sizemode="maximized"]:not([inFullscreen]) #browser'), label);
   }
+});
+
+test("a chosen font goes on everything in Firefox's window, safely quoted", () => {
+  assert.equal(defaults().uiFont, "");
+  assert.ok(!generateCss(defaults()).includes("font-family"), "Firefox's own font: no rule");
+  const css = generateCss({ ...defaults(), uiFont: "DejaVu Serif" });
+  assert.ok(css.includes('#main-window,\n#main-window * {\n  font-family: "DejaVu Serif", system-ui !important;\n}'));
+  // Quotes and backslashes can't end the CSS string early.
+  assert.equal(fontFamilyCss('A "B" \\ C'), '"A \\"B\\" \\\\ C", system-ui');
+});
+
+test("font names are trimmed, and unsafe or overlong ones fall back to Firefox's font", () => {
+  assert.equal(sanitize({ uiFont: "  Noto Sans  " }).uiFont, "Noto Sans");
+  assert.equal(sanitize({ uiFont: "思源黑体" }).uiFont, "思源黑体");
+  for (const bad of ["bad\nname", "tab\there", "x".repeat(101), 'evil url("x")', "@import x", 42, null]) {
+    assert.equal(sanitize({ uiFont: bad }).uiFont, "", JSON.stringify(bad));
+  }
+  assert.equal(sanitize({ uiFont: "x".repeat(100) }).uiFont.length, 100);
 });

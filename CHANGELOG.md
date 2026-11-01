@@ -3,6 +3,20 @@
 Each version is a `v` tag, with the extension and helper on its
 [release page](https://github.com/mattsaund/Kits-Editor-for-Firefox/releases).
 
+## 0.5.4 (2026-11-01)
+
+- **Font manager.** Pick the font Firefox uses for its tabs, toolbar,
+  address bar, bookmarks and menus, from a list of the fonts installed on
+  your computer. Each one shows "The quick brown fox jumps over the lazy
+  dog" in itself, and you can search the list by name. Fonts you install
+  show up the next time you open the list. Web pages keep their own fonts.
+- **Profiles save the font too.** A profile's font that isn't installed on
+  another computer shows in the list as not installed there, and Firefox's
+  own font stands in for it.
+- **Update the helper:** run its install command again (the settings page
+  shows it). Extensions can't see installed fonts, so the helper lists them.
+  Then press **Apply**.
+
 ## 0.5.3 (2026-11-01)
 
 - **Kits has a new home on GitHub:**

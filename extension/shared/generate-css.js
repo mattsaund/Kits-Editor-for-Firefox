@@ -196,6 +196,7 @@ function rules(s) {
   blocks.push(...urlbarRules(s));
   blocks.push(...bookmarksRules(s));
   blocks.push(...pageEdgeRules(s));
+  blocks.push(...fontRules(s));
   if (s.reducedMotion && (s.autoHide || s.toolbarAutoHide || s.bookmarksAutoHide)) blocks.push(reducedMotionRule(s));
   blocks.push(`/* The signal from "Let clicks through to the page" (see PAGE_ACTION); never seen (see SIGNAL_BOX). */
 ${rule(PAGE_ACTION, SIGNAL_BOX)}`);
@@ -342,6 +343,22 @@ function expandedSelectors({ root = ":root", target, menus, extraSelf = [] }) {
   ];
   const lead = root === ":root" ? "" : `${root} `;
   return [...self.map((c) => `${lead}${target}${c}`), ...outside.map((c) => `${root}${c} ${target}`)];
+}
+
+/**
+ * A font family name as a CSS font-family value: the name as a CSS string
+ * (backslashes and quotes escaped; sanitize keeps out the rest), then the
+ * system's own interface font for anything it lacks, or if it isn't installed.
+ */
+export function fontFamilyCss(name) {
+  return `"${name.replace(/[\\"]/g, "\\$&")}", system-ui`;
+}
+
+/** Firefox's font on everything in its window (see uiFont). Nothing for Firefox's default. */
+function fontRules(s) {
+  if (!s.uiFont) return [];
+  return [`/* Firefox's font, on its bars and menus. Pages keep their own. */
+${rule(["#main-window", "#main-window *"], [`font-family: ${fontFamilyCss(s.uiFont)}`])}`];
 }
 
 /** An edge line drawn inside a bar, on the side facing the page. */

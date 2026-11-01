@@ -301,6 +301,86 @@ class Profiles(unittest.TestCase):
                 host.handle(msg, ctx)
 
 
+def sfnt(base, names):
+    """A minimal font starting at offset `base` of its file: a table directory
+    with just a name table, holding (name_id, platform, encoding, language, text)."""
+    records, strings = [], b""
+    for name_id, platform_id, encoding, language, text in names:
+        raw = text.encode("utf-16-be") if platform_id in (0, 3) else text.encode("mac_roman")
+        records.append(struct.pack(">6H", platform_id, encoding, language, name_id, len(raw), len(strings)))
+        strings += raw
+    name_table = struct.pack(">3H", 0, len(records), 6 + 12 * len(records)) + b"".join(records) + strings
+    directory = struct.pack(">I4H", 0x00010000, 1, 0, 0, 0) + struct.pack(">4s3I", b"name", 0, base + 28, len(name_table))
+    return directory + name_table
+
+
+def collection(*fonts):
+    """A font collection (.ttc) holding fonts given as name lists, as for sfnt."""
+    header = 12 + 4 * len(fonts)
+    chunks, offsets, at = [], [], header
+    for names in fonts:
+        chunk = sfnt(at, names)
+        offsets.append(at)
+        chunks.append(chunk)
+        at += len(chunk)
+    return b"ttcf" + struct.pack(">2HI", 1, 0, len(fonts)) + struct.pack(">{}I".format(len(fonts)), *offsets) + b"".join(chunks)
+
+
+class Fonts(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = self.tmp.name
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write(self, name, data):
+        path = os.path.join(self.dir, name)
+        with open(path, "wb") as f:
+            f.write(data)
+        return path
+
+    def test_the_family_firefox_lists_wins(self):
+        # The typographic family (16) over the per-weight family (1); Windows'
+        # English name over another language and over the old Mac name.
+        path = self.write("a.ttf", sfnt(0, [
+            (1, 3, 1, 0x409, "Example Light"),
+            (16, 1, 0, 0, "Mac Example"),
+            (16, 3, 1, 0x407, "Beispiel"),
+            (16, 3, 1, 0x409, "Example"),
+        ]))
+        self.assertEqual(host.font_file_families(path), ["Example"])
+        only_family = self.write("b.otf", sfnt(0, [(1, 1, 0, 0, "Old Mac Only")]))
+        self.assertEqual(host.font_file_families(only_family), ["Old Mac Only"])
+
+    def test_a_collection_lists_each_font(self):
+        path = self.write("c.ttc", collection([(1, 3, 1, 0x409, "First")], [(16, 3, 1, 0x409, "Second")]))
+        self.assertEqual(host.font_file_families(path), ["First", "Second"])
+
+    def test_folders_are_searched_and_broken_files_skipped(self):
+        os.makedirs(os.path.join(self.dir, "nested"))
+        self.write(os.path.join("nested", "d.TTF"), sfnt(0, [(1, 3, 1, 0x409, "Nested Font")]))
+        self.write("broken.ttf", b"not a font at all")
+        self.write("notes.txt", b"ignored")
+        self.assertEqual(host.fonts_in_dirs([self.dir, os.path.join(self.dir, "missing")]), ["Nested Font"])
+
+    def test_names_are_tidied(self):
+        names = ["Zeta", " alpha ", "Alpha", ".SF NS", "@MS Gothic", "", "x" * 101, "Beta"]
+        self.assertEqual(host.tidy_font_names(names), ["alpha", "Beta", "Zeta"])
+
+    def test_listing_fonts_needs_no_profile(self):
+        def no_profiles(*args):
+            raise AssertionError("looked for Firefox profiles")
+        saved = host.list_profiles
+        host.list_profiles = no_profiles
+        try:
+            reply = host.handle({"cmd": "fonts"})
+        finally:
+            host.list_profiles = saved
+        self.assertTrue(reply["ok"])
+        self.assertTrue(all(isinstance(name, str) for name in reply["fonts"]))
+
+
 @unittest.skipUnless(sys.platform == "win32", "Windows only")
 class WindowsProfileLock(unittest.TestCase):
     def setUp(self):

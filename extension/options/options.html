@@ -47,6 +47,21 @@
       </section>
 
       <section class="card">
+        <h2>Font</h2>
+        <p class="hint section-hint">Firefox's own font: its tabs, toolbar, address bar, bookmarks and menus. Web pages keep theirs. Fonts you install show up here.</p>
+        <!-- The setting; the picker below writes it (see the Font section of options.js). -->
+        <input type="hidden" name="uiFont">
+        <div class="font-picker">
+          <button id="font-button" type="button" class="font-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="font-menu"></button>
+          <div id="font-menu" class="font-menu" hidden>
+            <input type="search" id="font-search" placeholder="Search fonts" aria-label="Search fonts" autocomplete="off">
+            <ul id="font-list" class="font-list" role="listbox" aria-label="Fonts"></ul>
+            <p id="font-note" class="hint" hidden></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
         <h2>Layout</h2>
         <h3 class="first">Tab bar</h3>
         <div class="positions" role="radiogroup" aria-label="Tab bar position">

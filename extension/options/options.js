@@ -14,7 +14,7 @@ import {
   sanitize,
 } from "../shared/settings.js";
 import { CLICK_THROUGH_ACCESS, clickThroughAllowed } from "../shared/click-through.js";
-import { generateCss, hexToRgba } from "../shared/generate-css.js";
+import { fontFamilyCss, generateCss, hexToRgba } from "../shared/generate-css.js";
 import { profileMatches, profileName, sameName, sanitizeProfiles, saveProfile } from "../shared/profiles.js";
 import {
   REPO,
@@ -30,8 +30,8 @@ const HOST = "autohide_tab_bar";
 
 // The oldest helper this version of the extension works with. Raise it when a
 // release changes the helper; releases that don't, don't ask for an update.
-// 0.4.0: the bookmarks toolbar setting joined the helper's allowed prefs.
-const HELPER_NEEDED = "0.4.0";
+// 0.5.4: the font list (the helper's "fonts" command).
+const HELPER_NEEDED = "0.5.4";
 
 // One-line helper installers, shown when the helper is missing or outdated.
 const DOWNLOAD = `https://github.com/${REPO}/releases/latest/download`;
@@ -328,6 +328,7 @@ function renderPreview() {
   // Toolbar and address bar look.
   set("--tb-bg", s.toolbarBgCustom ? s.toolbarBgColor : null);
   set("--tb-icon", s.toolbarIconCustom ? s.toolbarIconColor : null);
+  set("--ui-font", s.uiFont ? fontFamilyCss(s.uiFont) : null);
   set("--url-bg", s.urlbarBgCustom ? s.urlbarBgColor : null);
   set("--url-text", s.urlbarTextCustom ? s.urlbarTextColor : null);
   set("--url-focus", s.urlbarFocusCustom ? s.urlbarFocusColor : null);
@@ -426,6 +427,7 @@ function onSettingsChanged() {
   renderOrder();
   renderPreview();
   renderProfiles();
+  renderFontButton();
   refreshDerived();
   scheduleSave();
 }
@@ -994,6 +996,125 @@ profileNameInput.addEventListener("keydown", (e) => {
 });
 
 // ---------------------------------------------------------------------------
+// Font
+// ---------------------------------------------------------------------------
+
+// The sentence every font shows itself in.
+const FONT_SAMPLE = "The quick brown fox jumps over the lazy dog";
+
+const fontInput = form.elements.uiFont;
+const fontButton = document.getElementById("font-button");
+const fontMenu = document.getElementById("font-menu");
+const fontSearch = document.getElementById("font-search");
+const fontList = document.getElementById("font-list");
+const fontNote = document.getElementById("font-note");
+let fonts = []; // the installed font families, as the helper last listed them
+
+/**
+ * Asks the helper for the installed fonts (extensions can't list them). It
+ * runs each time the list opens, so a font installed meanwhile is in it.
+ */
+async function loadFonts() {
+  try {
+    const reply = await callHost({ cmd: "fonts" });
+    fonts = Array.isArray(reply.fonts) ? reply.fonts.filter((name) => typeof name === "string") : [];
+    fontNote.hidden = true;
+  } catch (e) {
+    // An older helper doesn't know the command; without one there's nobody to ask.
+    fontNote.textContent =
+      e instanceof HostReplyError
+        ? "To see your fonts here, update the helper: run its install command again (see Apply to Firefox)."
+        : "Your fonts are listed by the helper program. Install it to see them here (see Apply to Firefox).";
+    fontNote.hidden = false;
+  }
+}
+
+/** A font's name, and the sample sentence in that font ("" is Firefox's own interface font). */
+function fontRow(name, label, note) {
+  const sample = h("span", { class: "font-sample" }, FONT_SAMPLE);
+  sample.style.fontFamily = name ? fontFamilyCss(name) : "system-ui";
+  return [h("span", { class: "font-name" }, label, note && h("small", {}, note)), sample];
+}
+
+/** The button shows the font in use. */
+function renderFontButton() {
+  fontButton.replaceChildren(...fontRow(settings.uiFont, settings.uiFont || "Firefox default"));
+}
+
+/** The list: Firefox's default, then every installed font, narrowed down by the search. */
+function renderFontList() {
+  const query = fontSearch.value.trim().toLocaleLowerCase();
+  const choices = [{ name: "", label: "Firefox default" }];
+  // A font from a profile saved on another computer, missing here.
+  if (settings.uiFont && fonts.length && !fonts.includes(settings.uiFont)) {
+    choices.push({ name: settings.uiFont, label: settings.uiFont, note: "Not installed on this computer" });
+  }
+  choices.push(...fonts.map((name) => ({ name, label: name })));
+  const items = choices
+    .filter((choice) => !query || choice.label.toLocaleLowerCase().includes(query))
+    .map((choice) =>
+      h(
+        "li",
+        { role: "option", tabindex: "-1", "data-font": choice.name, "aria-selected": String(choice.name === settings.uiFont) },
+        ...fontRow(choice.name, choice.label, choice.note),
+      ),
+    );
+  fontList.replaceChildren(...items);
+}
+
+async function openFontMenu() {
+  fontMenu.hidden = false;
+  fontButton.setAttribute("aria-expanded", "true");
+  fontSearch.value = "";
+  renderFontList();
+  fontSearch.focus();
+  await loadFonts();
+  if (!fontMenu.hidden) renderFontList();
+}
+
+function closeFontMenu({ focusButton = false } = {}) {
+  fontMenu.hidden = true;
+  fontButton.setAttribute("aria-expanded", "false");
+  if (focusButton) fontButton.focus();
+}
+
+/** Picks a font, through the form like any other control. */
+function chooseFont(name) {
+  fontInput.value = name;
+  fontInput.dispatchEvent(new Event("input", { bubbles: true }));
+  closeFontMenu({ focusButton: true });
+}
+
+fontButton.addEventListener("click", () => (fontMenu.hidden ? openFontMenu() : closeFontMenu()));
+fontSearch.addEventListener("input", renderFontList);
+fontList.addEventListener("click", (e) => {
+  const item = e.target.closest("[role=option]");
+  if (item) chooseFont(item.dataset.font);
+});
+// Arrows move through the list, Enter picks, Escape closes.
+fontMenu.addEventListener("keydown", (e) => {
+  const items = [...fontList.querySelectorAll("[role=option]")];
+  const at = items.indexOf(document.activeElement);
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    const next = e.key === "ArrowDown" ? Math.min(at + 1, items.length - 1) : at - 1;
+    (next < 0 ? fontSearch : items[next])?.focus();
+  } else if (e.key === "Enter") {
+    // Also keeps Enter in the search box from submitting the settings form.
+    e.preventDefault();
+    const item = items[Math.max(at, 0)];
+    if (item) chooseFont(item.dataset.font);
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    closeFontMenu({ focusButton: true });
+  }
+});
+// Pointing anywhere else closes the list.
+document.addEventListener("pointerdown", (e) => {
+  if (!fontMenu.hidden && !e.target.closest(".font-picker")) closeFontMenu();
+});
+
+// ---------------------------------------------------------------------------
 // Buttons
 // ---------------------------------------------------------------------------
 
@@ -1125,6 +1246,7 @@ async function init() {
   updateDependents();
   renderOrder();
   renderPreview();
+  renderFontButton();
   await refreshDerived();
   await refreshStatus();
 }
